@@ -3,12 +3,25 @@ Structural AI Pipeline
 Integrates acoustic ingestion, structural parsing, and Chomskyan syntactic analysis
 """
 import json
+import sys
+import os
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
 
-from engine.sonic import AcousticProcessor
-from engine.struct import StructuralParser
-from engine.syntax import ChomskyanSyntaxAnalyzer
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.settings import (
+    WHISPER_MODEL,
+    WHISPER_DEVICE,
+    SPACY_MODEL,
+    NLTK_DATA_DIR
+)
+
+# Import modules directly to avoid circular imports
+from engine.sonic.processor import AcousticProcessor
+from engine.struct.structural import StructuralParser
+from engine.syntax.analyzer import ChomskyanSyntaxAnalyzer
 
 
 class StructuralAIPipeline:

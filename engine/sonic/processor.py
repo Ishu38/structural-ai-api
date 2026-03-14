@@ -5,7 +5,11 @@ Handles speech-to-text conversion with optimized GPU inference
 import torch
 from faster_whisper import WhisperModel
 from typing import Optional, Dict, Any
-from engine.config.settings import (
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from config.settings import (
     WHISPER_MODEL, 
     WHISPER_DEVICE, 
     WHISPER_COMPUTE_TYPE,

@@ -9,7 +9,11 @@ Implements deep Chomskyan syntax tree analysis with:
 import nltk
 from typing import Dict, Any, List, Optional, Tuple, Set
 from collections import defaultdict
-from engine.config.settings import NLTK_DATA_DIR
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from config.settings import NLTK_DATA_DIR
 
 
 class ChomskyanSyntaxAnalyzer:

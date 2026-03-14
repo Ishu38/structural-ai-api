@@ -4,7 +4,11 @@ Handles part-of-speech tagging and basic syntactic analysis
 """
 import spacy
 from typing import Dict, Any, List, Optional
-from engine.config.settings import SPACY_MODEL
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from config.settings import SPACY_MODEL
 
 
 class StructuralParser:

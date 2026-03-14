@@ -1,0 +1,444 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Structural AI API",
+    "description": "Deep Chomskyan syntactic analysis API for EdTech and research applications. Provides automated linguistic annotation including noun phrase structures, verb phrase analysis, morphemic breakdowns, and structural ambiguity detection.",
+    "version": "1.0.0",
+    "contact": {
+      "email": "support@structuralai.api"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.structuralai.app/v1",
+      "description": "Production server"
+    },
+    {
+      "url": "http://localhost:3000/api",
+      "description": "Development server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "User registration, login, and API key management"
+    },
+    {
+      "name": "Analysis",
+      "description": "Text and audio syntactic analysis endpoints"
+    },
+    {
+      "name": "Billing",
+      "description": "Usage tracking and subscription management"
+    },
+    {
+      "name": "Users",
+      "description": "User profile and settings"
+    }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "user@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "SecurePass123!"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "John Doe"
+                  },
+                  "company": {
+                    "type": "string",
+                    "example": "Acme Research Lab"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "User already exists"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login and get API key",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "user@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "SecurePass123!"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/analyze/text": {
+      "post": {
+        "tags": ["Analysis"],
+        "summary": "Analyze text for syntactic structure",
+        "security": [{"ApiKeyAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Text to analyze (max 50,000 tokens)",
+                    "example": "The quick brown fox jumps over the lazy dog."
+                  },
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "includeMorphemes": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "detectAmbiguities": {
+                        "type": "boolean",
+                        "default": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analysis result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextAnalysisResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or text too long"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/analyze/audio": {
+      "post": {
+        "tags": ["Analysis"],
+        "summary": "Analyze audio file (transcribe + syntactic analysis)",
+        "security": [{"ApiKeyAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["audio"],
+                "properties": {
+                  "audio": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Audio file (wav, mp3, ogg, webm, flac, m4a). Max 50MB."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Source language code (auto-detect if not specified)",
+                    "example": "en"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audio analysis result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioAnalysisResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid audio format"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/analyze/batch": {
+      "post": {
+        "tags": ["Analysis"],
+        "summary": "Batch analyze multiple texts",
+        "security": [{"ApiKeyAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["texts"],
+                "properties": {
+                  "texts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "example": [
+                      "The cat sat on the mat.",
+                      "Quick brown fox jumps."
+                    ]
+                  },
+                  "options": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch analysis results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAnalysisResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/usage": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get current billing period usage",
+        "security": [{"ApiKeyAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Usage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/plans": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get available pricing plans",
+        "security": [{"ApiKeyAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of pricing plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Your API key (also accepts Bearer token in Authorization header)"
+      }
+    },
+    "schemas": {
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "email": {"type": "string"},
+              "name": {"type": "string"},
+              "apiKey": {"type": "string"}
+            }
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "TextAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string", "enum": ["completed", "failed"]},
+          "processingTimeMs": {"type": "number"},
+          "result": {
+            "type": "object",
+            "properties": {
+              "input": {"type": "object"},
+              "structural": {"type": "object"},
+              "syntactic": {"type": "object"},
+              "metadata": {"type": "object"}
+            }
+          },
+          "billing": {
+            "type": "object",
+            "properties": {
+              "tokens": {"type": "number"},
+              "billable": {"type": "boolean"}
+            }
+          }
+        }
+      },
+      "AudioAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string"},
+          "processingTimeMs": {"type": "number"},
+          "result": {"type": "object"},
+          "billing": {
+            "type": "object",
+            "properties": {
+              "audioSeconds": {"type": "number"},
+              "audioMinutes": {"type": "number"},
+              "billable": {"type": "boolean"}
+            }
+          }
+        }
+      },
+      "BatchAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "processingTimeMs": {"type": "number"},
+          "total": {"type": "number"},
+          "successful": {"type": "number"},
+          "failed": {"type": "number"},
+          "results": {"type": "array"},
+          "errors": {"type": "array"}
+        }
+      },
+      "UsageResponse": {
+        "type": "object",
+        "properties": {
+          "period": {"type": "object"},
+          "plan": {"type": "object"},
+          "usage": {"type": "object"},
+          "billing": {"type": "object"}
+        }
+      },
+      "PlansResponse": {
+        "type": "object",
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "price": {"type": "number"},
+                "limits": {"type": "object"},
+                "overage": {"type": "object"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

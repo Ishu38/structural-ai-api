@@ -1,0 +1,23 @@
+# Nixpacks Configuration for Railway
+# Automatically builds Node.js + Python hybrid apps
+
+[phases.setup]
+nixPkgs = ["nodejs-18_x", "python311", "gcc"]
+
+[phases.install]
+cmds = [
+  "npm install",
+  "cd src && pip install -r ../requirements.txt"
+]
+
+[phases.build]
+cmds = [
+  "python -m spacy download en_core_web_lg"
+]
+
+[start]
+cmd = "node src/api/server.js"
+
+[variables]
+NODE_ENV = "production"
+PYTHONUNBUFFERED = "1"

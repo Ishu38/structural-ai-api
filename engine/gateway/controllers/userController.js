@@ -204,14 +204,17 @@ exports.deleteAccount = async (req, res) => {
     
     const user = await User.findById(req.user._id);
     
-    // Cancel Stripe subscription if exists
-    if (user.stripeSubscriptionId) {
+    // Cancel Razorpay subscription if exists
+    if (user.razorpaySubscriptionId) {
       try {
-        const Stripe = require('stripe');
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
-      } catch (stripeError) {
-        console.error('Failed to cancel Stripe subscription:', stripeError);
+        const Razorpay = require('razorpay');
+        const razorpay = new Razorpay({
+          key_id: process.env.RAZORPAY_KEY_ID,
+          key_secret: process.env.RAZORPAY_KEY_SECRET
+        });
+        await razorpay.subscriptions.cancel(user.razorpaySubscriptionId);
+      } catch (razorpayError) {
+        console.error('Failed to cancel Razorpay subscription:', razorpayError);
       }
     }
     

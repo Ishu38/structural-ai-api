@@ -25,8 +25,8 @@ A production-ready API for deep Chomskyan syntactic analysis and acoustic proces
 
 ### Phase 2-5: Coming Soon
 - API Gateway (Express.js + MongoDB)
-- Automated Billing (Stripe metered usage)
-- Serverless GPU Deployment (RunPod/Modal)
+- Automated Billing (Razorpay metered usage - INR pricing)
+- Serverless GPU Deployment (Modal/Runway)
 - Developer Documentation
 
 ## Quick Start

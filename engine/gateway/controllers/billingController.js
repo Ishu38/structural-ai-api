@@ -1,18 +1,24 @@
 /**
  * Billing Controller
- * Handles Stripe integration and usage-based billing
+ * Handles Razorpay integration and usage-based billing
+ * Razorpay: Better for India - UPI, lower fees, easier KYC
  */
-const Stripe = require('stripe');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 const { UsageLog, User } = require('../models');
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'placeholder_secret'
+});
 
-// Pricing plans
+// Pricing plans (INR for Indian market)
 const PLANS = {
   free: {
     id: 'free',
     name: 'Free Tier',
     price: 0,
+    currency: 'INR',
     limits: {
       requestsPerMinute: 20,
       requestsPerDay: 1000,
@@ -20,15 +26,16 @@ const PLANS = {
       includedAudioMinutes: 10
     },
     overage: {
-      per1000Tokens: 0.002,
-      perAudioMinute: 0.05
+      per1000Tokens: 0.15,  // ₹0.15 per 1K tokens
+      perAudioMinute: 4     // ₹4 per audio minute
     }
   },
   pro: {
     id: 'pro',
-    id: 'price_pro_placeholder',
+    razorpayPlanId: 'plan_pro_inr',
     name: 'Pro Tier',
-    price: 4900, // $49.00 in cents
+    price: 399900,  // ₹3,999 in paise
+    currency: 'INR',
     limits: {
       requestsPerMinute: 50,
       requestsPerDay: 10000,
@@ -36,15 +43,16 @@ const PLANS = {
       includedAudioMinutes: 100
     },
     overage: {
-      per1000Tokens: 0.0015,
-      perAudioMinute: 0.03
+      per1000Tokens: 0.10,
+      perAudioMinute: 2.50
     }
   },
   enterprise: {
     id: 'enterprise',
-    priceId: 'price_enterprise_placeholder',
+    razorpayPlanId: 'plan_enterprise_inr',
     name: 'Enterprise',
-    price: 29900, // $299.00 in cents
+    price: 2499900,  // ₹24,999 in paise
+    currency: 'INR',
     limits: {
       requestsPerMinute: 200,
       requestsPerDay: 100000,
@@ -52,8 +60,8 @@ const PLANS = {
       includedAudioMinutes: 1000
     },
     overage: {
-      per1000Tokens: 0.001,
-      perAudioMinute: 0.02
+      per1000Tokens: 0.08,
+      perAudioMinute: 1.50
     }
   }
 };
@@ -104,7 +112,8 @@ exports.getUsage = async (req, res) => {
       },
       plan: {
         name: plan.name,
-        price: plan.price / 100
+        price: plan.price / 100,
+        currency: plan.currency
       },
       usage: {
         totalRequests,
@@ -122,7 +131,7 @@ exports.getUsage = async (req, res) => {
         basePrice: plan.price / 100,
         overageCost: totalOverage.toFixed(2),
         estimatedTotal: (plan.price / 100 + totalOverage).toFixed(2),
-        currency: 'USD'
+        currency: plan.currency || 'INR'
       },
       breakdown: usageSummary
     });
@@ -137,33 +146,33 @@ exports.getUsage = async (req, res) => {
 };
 
 /**
- * Get invoice history
+ * Get invoice history (Razorpay payments)
  */
 exports.getInvoices = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
-    if (!user.stripeCustomerId) {
+    if (!user.razorpayCustomerId) {
       return res.json({
         invoices: [],
         message: 'No billing history available'
       });
     }
     
-    const invoices = await stripe.invoices.list({
-      customer: user.stripeCustomerId,
-      limit: 10
+    // Fetch Razorpay payments
+    const payments = await razorpay.payments.all({
+      customer_id: user.razorpayCustomerId,
+      count: 10
     });
     
     res.json({
-      invoices: invoices.data.map(inv => ({
-        id: inv.id,
-        amount: inv.amount_paid / 100,
-        currency: inv.currency,
-        status: inv.status,
-        created: new Date(inv.created * 1000).toISOString(),
-        pdfUrl: inv.invoice_pdf,
-        hostedInvoiceUrl: inv.hosted_invoice_url
+      invoices: payments.items.map(payment => ({
+        id: payment.id,
+        amount: payment.amount / 100,
+        currency: payment.currency,
+        status: payment.status,
+        created: new Date(payment.created_at * 1000).toISOString(),
+        method: payment.method || 'card'
       }))
     });
     
@@ -177,7 +186,7 @@ exports.getInvoices = async (req, res) => {
 };
 
 /**
- * Create or update subscription
+ * Create Razorpay subscription
  */
 exports.createSubscription = async (req, res) => {
   try {
@@ -194,48 +203,45 @@ exports.createSubscription = async (req, res) => {
         message: 'Subscription updated to Free plan',
         plan: {
           name: plan.name,
-          price: 0
+          price: 0,
+          currency: 'INR'
         }
       });
     }
     
     const user = await User.findById(req.user._id);
     
-    // Create or get Stripe customer
-    let customerId = user.stripeCustomerId;
+    // Create or get Razorpay customer
+    let customerId = user.razorpayCustomerId;
     
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await razorpay.customers.create({
         email: user.email,
         name: user.name,
-        metadata: {
+        notes: {
           userId: user._id.toString()
         }
       });
       customerId = customer.id;
-      user.stripeCustomerId = customerId;
+      user.razorpayCustomerId = customerId;
       await user.save();
     }
     
-    // Create subscription
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{
-        price: plan.priceId || 'price_pro_monthly' // Use actual price ID in production
-      }],
-      payment_behavior: 'default_incomplete',
-      payment_settings: {
-        save_default_payment_method: 'on_subscription'
-      },
-      expand: ['latest_invoice.payment_intent']
+    // Create Razorpay subscription
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: plan.razorpayPlanId || 'plan_pro_monthly',
+      customer_notify: 1,
+      total_count: 12,
+      customer_id: customerId
     });
     
     res.json({
       subscriptionId: subscription.id,
-      clientSecret: subscription.latest_invoice.payment_intent.client_secret,
+      shortUrl: subscription.short_url,  // Razorpay payment page
       plan: {
         name: plan.name,
-        price: plan.price / 100
+        price: plan.price / 100,
+        currency: plan.currency
       }
     });
     
@@ -255,27 +261,29 @@ exports.getSubscription = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
-    if (!user.stripeSubscriptionId) {
+    if (!user.razorpaySubscriptionId) {
       return res.json({
         active: false,
         plan: {
           name: req.user.role || 'free',
-          price: 0
+          price: 0,
+          currency: 'INR'
         }
       });
     }
     
-    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+    const subscription = await razorpay.subscriptions.fetch(user.razorpaySubscriptionId);
     
     res.json({
       active: subscription.status === 'active',
       status: subscription.status,
       plan: {
-        name: subscription.items.data[0]?.plan?.nickname || 'Pro',
-        price: subscription.items.data[0]?.plan?.amount / 100 || 49
+        name: 'Pro',
+        price: subscription.plan_amount / 100 || 3999,
+        currency: 'INR'
       },
-      currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      currentPeriodStart: new Date(subscription.start_at * 1000).toISOString(),
+      currentPeriodEnd: new Date(subscription.end_at * 1000).toISOString(),
       cancelAtPeriodEnd: subscription.cancel_at_period_end
     });
     
@@ -295,21 +303,18 @@ exports.cancelSubscription = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
-    if (!user.stripeSubscriptionId) {
+    if (!user.razorpaySubscriptionId) {
       return res.status(400).json({
         error: 'No Subscription',
         message: 'No active subscription to cancel'
       });
     }
     
-    const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
-      cancel_at_period_end: true
-    });
+    await razorpay.subscriptions.cancel(user.razorpaySubscriptionId);
     
     res.json({
-      message: 'Subscription will be cancelled at the end of the billing period',
-      cancelledAt: new Date().toISOString(),
-      effectiveDate: new Date(subscription.current_period_end * 1000).toISOString()
+      message: 'Subscription cancelled successfully',
+      cancelledAt: new Date().toISOString()
     });
     
   } catch (error) {
@@ -322,45 +327,48 @@ exports.cancelSubscription = async (req, res) => {
 };
 
 /**
- * Handle Stripe webhooks
+ * Handle Razorpay webhooks
  */
 exports.handleWebhook = async (req, res) => {
-  const sig = req.headers['stripe-signature'];
+  const razorpaySignature = req.headers['x-razorpay-signature'];
   
   try {
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
+    // Verify webhook signature
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+    
+    if (expectedSignature !== razorpaySignature) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+    
+    const event = req.body;
     
     // Handle the event
-    switch (event.type) {
-      case 'invoice.payment_succeeded':
-        // Payment succeeded - usage has been billed
-        console.log('Invoice payment succeeded:', event.data.object.id);
+    switch (event.event) {
+      case 'payment.captured':
+        // Payment succeeded
+        console.log('Payment captured:', event.payload.payment.entity.id);
         break;
         
-      case 'invoice.payment_failed':
-        // Payment failed - notify user
-        console.log('Invoice payment failed:', event.data.object.id);
-        // TODO: Send notification to user
+      case 'payment.failed':
+        // Payment failed
+        console.log('Payment failed:', event.payload.payment.entity.id);
         break;
         
-      case 'customer.subscription.updated':
-        // Subscription updated
-        const subscription = event.data.object;
-        // TODO: Update user's subscription status
+      case 'subscription.activated':
+        // Subscription activated
+        console.log('Subscription activated:', event.payload.subscription.entity.id);
         break;
         
-      case 'customer.subscription.deleted':
+      case 'subscription.cancelled':
         // Subscription cancelled
-        console.log('Subscription deleted:', event.data.object.id);
-        // TODO: Update user's role to free
+        console.log('Subscription cancelled:', event.payload.subscription.entity.id);
         break;
         
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.log(`Unhandled event type: ${event.event}`);
     }
     
     res.json({ received: true });
